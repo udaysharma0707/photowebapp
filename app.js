@@ -1,5 +1,5 @@
 // Replace with your Google Apps Script Web App URL
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzeTghj24hlsUk5AcfcFgimnv59r7GXDmJfM_1S0zoqK-IoXDyhoZBuPVrQ1kAq4vHn/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzdO3Ft3eBVcGqwSF-qARGHMbIaQIqGEpnk3QZsnS5UF-Kv6VgpMLTzHAK5A2lvSDlL/exec';
 
 let selectedFile = null;
 let selectedImage = null;
@@ -220,3 +220,4 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
     showStatus('You\'re offline. Photos will be uploaded when connection returns.', 'error');
 });
+
