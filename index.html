@@ -1,12 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
+    <base target="_top">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Photo Upload App</title>
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2196F3">
-    <link rel="apple-touch-icon" href="icon-192.png">
     <style>
         * {
             margin: 0;
@@ -211,15 +209,144 @@
         <div id="status"></div>
     </div>
 
-    <script src="app.js"></script>
     <script>
-        // Register service worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(registration => console.log('SW registered'))
-                    .catch(error => console.log('SW registration failed'));
-            });
+        let selectedFile = null;
+        let selectedImage = null;
+
+        // Drag and drop functionality
+        const uploadArea = document.getElementById('uploadArea');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                handleFile(files[0]);
+            }
+        });
+
+        function openCamera() {
+            document.getElementById('cameraInput').click();
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            selectedFile = file;
+            
+            // Compress image if too large
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Set max dimensions
+                    const maxWidth = 1920;
+                    const maxHeight = 1080;
+                    let { width, height } = img;
+                    
+                    // Calculate new dimensions
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width *= maxHeight / height;
+                            height = maxHeight;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    // Draw and compress
+                    ctx.drawImage(img, 0, 0, width, height);
+                    selectedImage = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    // Show preview
+                    document.getElementById('previewImage').src = selectedImage;
+                    document.getElementById('previewContainer').style.display = 'block';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function uploadPhoto() {
+            if (!selectedImage) {
+                showStatus('Please select a photo first', 'error');
+                return;
+            }
+            
+            showLoading(true);
+            
+            // Call Google Apps Script function directly (no CORS issues)
+            google.script.run
+                .withSuccessHandler(onUploadSuccess)
+                .withFailureHandler(onUploadError)
+                .uploadPhotoToSheet(
+                    selectedImage, 
+                    selectedFile ? selectedFile.name : 'camera_photo_' + Date.now() + '.jpg'
+                );
+        }
+        
+        function onUploadSuccess(result) {
+            showLoading(false);
+            
+            if (result.success) {
+                showStatus(`Success! Photo saved as "${result.shortName}"`, 'success');
+                resetForm();
+            } else {
+                showStatus(`Error: ${result.message}`, 'error');
+            }
+        }
+        
+        function onUploadError(error) {
+            showLoading(false);
+            showStatus(`Upload failed: ${error.message}`, 'error');
+        }
+
+        function resetForm() {
+            selectedFile = null;
+            selectedImage = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('cameraInput').value = '';
+            document.getElementById('previewContainer').style.display = 'none';
+            document.getElementById('status').innerHTML = '';
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 5000);
+            }
         }
     </script>
 </body>
