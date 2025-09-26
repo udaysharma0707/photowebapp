@@ -1,5 +1,4 @@
-// Replace with your Google Apps Script Web App URL
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx5x0NzcbbPKJwg5ZISL015g2RzUki32TRgerdwXqCEx2H50fhCd8rMt4DRytgA-E22/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby3oN3qR2OFpYTuNJM25Uc2xkFhC1kEB7kNEz_s58J5hq5nop1v-O417JVLNMoM6scr/exec';
 
 let selectedFile = null;
 let selectedImage = null;
@@ -59,6 +58,7 @@ async function uploadPhoto() {
     showLoading(true);
     
     try {
+        // Use POST method with proper headers
         const response = await fetch(SCRIPT_URL, {
             method: 'POST',
             headers: {
@@ -67,19 +67,25 @@ async function uploadPhoto() {
             body: JSON.stringify({
                 action: 'uploadPhoto',
                 imageData: selectedImage,
-                fileName: selectedFile ? selectedFile.name : 'camera_photo.jpg'
+                fileName: selectedFile ? selectedFile.name : 'camera_photo_' + Date.now() + '.jpg'
             })
         });
+        
+        // Check if response is ok
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         const result = await response.json();
         
         if (result.success) {
-            showStatus(`Success! Photo saved as "${result.shortName}"`, 'success');
+            showStatus(`Success! Photo saved as "${result.data.shortName}"`, 'success');
             resetForm();
         } else {
-            showStatus(`Error: ${result.error}`, 'error');
+            showStatus(`Error: ${result.message}`, 'error');
         }
     } catch (error) {
+        console.error('Upload error:', error);
         showStatus(`Upload failed: ${error.message}`, 'error');
     }
     
@@ -110,7 +116,7 @@ function showStatus(message, type) {
     }
 }
 
-// Offline functionality
+// Network status handling
 window.addEventListener('online', () => {
     showStatus('Back online! You can upload photos now.', 'success');
 });
