@@ -1,4 +1,5 @@
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwcQmiEgIQ6OoJ6pRdHv0oqHt4fJ7J6lpCQguV6p2qzhQpyojY_f9VPgDBuYPf69Wmz/exec';
+// Replace with your Google Apps Script Web App URL
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzeTghj24hlsUk5AcfcFgimnv59r7GXDmJfM_1S0zoqK-IoXDyhoZBuPVrQ1kAq4vHn/exec';
 
 let selectedFile = null;
 let selectedImage = null;
@@ -39,12 +40,44 @@ function handleFileSelect(event) {
 function handleFile(file) {
     selectedFile = file;
     
-    // Create preview
+    // Compress and create preview
     const reader = new FileReader();
     reader.onload = (e) => {
-        selectedImage = e.target.result;
-        document.getElementById('previewImage').src = selectedImage;
-        document.getElementById('previewContainer').style.display = 'block';
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set max dimensions to avoid large uploads
+            const maxWidth = 1920;
+            const maxHeight = 1080;
+            let { width, height } = img;
+            
+            // Calculate new dimensions
+            if (width > height) {
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                }
+            } else {
+                if (height > maxHeight) {
+                    width *= maxHeight / height;
+                    height = maxHeight;
+                }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Draw and compress
+            ctx.drawImage(img, 0, 0, width, height);
+            selectedImage = canvas.toDataURL('image/jpeg', 0.7); // Reduced quality for faster upload
+            
+            // Show preview
+            document.getElementById('previewImage').src = selectedImage;
+            document.getElementById('previewContainer').style.display = 'block';
+        };
+        img.src = e.target.result;
     };
     reader.readAsDataURL(file);
 }
@@ -58,38 +91,101 @@ async function uploadPhoto() {
     showLoading(true);
     
     try {
-        // Use POST method with proper headers
-        const response = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                action: 'uploadPhoto',
-                imageData: selectedImage,
-                fileName: selectedFile ? selectedFile.name : 'camera_photo_' + Date.now() + '.jpg'
-            })
-        });
-        
-        // Check if response is ok
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showStatus(`Success! Photo saved as "${result.data.shortName}"`, 'success');
+        // Method 1: Try direct POST (might work after recent Google updates)
+        const directResponse = await tryDirectUpload();
+        if (directResponse.success) {
+            showStatus(`Success! Photo saved as "${directResponse.shortName}"`, 'success');
             resetForm();
-        } else {
-            showStatus(`Error: ${result.message}`, 'error');
+            showLoading(false);
+            return;
         }
     } catch (error) {
-        console.error('Upload error:', error);
-        showStatus(`Upload failed: ${error.message}`, 'error');
+        console.log('Direct upload failed, trying JSONP method...');
     }
     
-    showLoading(false);
+    // Method 2: Fallback to JSONP method
+    try {
+        await uploadViaJsonp();
+    } catch (error) {
+        showStatus(`Upload failed: ${error.message}`, 'error');
+        showLoading(false);
+    }
+}
+
+async function tryDirectUpload() {
+    const response = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            imageData: selectedImage,
+            fileName: selectedFile ? selectedFile.name : 'camera_photo_' + Date.now() + '.jpg'
+        })
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+}
+
+function uploadViaJsonp() {
+    return new Promise((resolve, reject) => {
+        // Create unique callback name
+        const callbackName = 'photoUploadCallback_' + Date.now();
+        
+        // Create callback function
+        window[callbackName] = function(response) {
+            // Cleanup
+            document.head.removeChild(script);
+            delete window[callbackName];
+            
+            showLoading(false);
+            
+            if (response.success) {
+                showStatus(`Success! Photo saved as "${response.shortName}"`, 'success');
+                resetForm();
+                resolve(response);
+            } else {
+                showStatus(`Error: ${response.error}`, 'error');
+                reject(new Error(response.error));
+            }
+        };
+        
+        // Create script tag for JSONP
+        const script = document.createElement('script');
+        
+        // Prepare URL with parameters
+        const params = new URLSearchParams({
+            action: 'upload',
+            callback: callbackName,
+            imageData: selectedImage,
+            fileName: selectedFile ? selectedFile.name : 'camera_photo_' + Date.now() + '.jpg'
+        });
+        
+        script.src = SCRIPT_URL + '?' + params.toString();
+        script.onerror = () => {
+            document.head.removeChild(script);
+            delete window[callbackName];
+            showLoading(false);
+            reject(new Error('JSONP request failed'));
+        };
+        
+        // Add script to head to trigger the request
+        document.head.appendChild(script);
+        
+        // Set timeout for cleanup
+        setTimeout(() => {
+            if (window[callbackName]) {
+                document.head.removeChild(script);
+                delete window[callbackName];
+                showLoading(false);
+                reject(new Error('Upload timeout'));
+            }
+        }, 30000); // 30 second timeout
+    });
 }
 
 function resetForm() {
@@ -124,4 +220,3 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
     showStatus('You\'re offline. Photos will be uploaded when connection returns.', 'error');
 });
-
