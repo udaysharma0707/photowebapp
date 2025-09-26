@@ -1,4 +1,4 @@
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybLlKF9rp6h6jIO-SDlUwzqi5QFyjCP2nfbbPyuUAgmuLfa3RWOjYcyV_2fhpKMXZ7/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz2lXBz5I4ltVTDxke6mollUnKurXODhM-f286wDfOUyHOrnNLdHymPuXXKGr4ccFKm/exec';
 
 let selectedFile = null;
 let selectedImage = null;
@@ -219,6 +219,7 @@ window.addEventListener('online', () => {
 window.addEventListener('offline', () => {
     showStatus('You\'re offline. Photos will be uploaded when connection returns.', 'error');
 });
+
 
 
 
